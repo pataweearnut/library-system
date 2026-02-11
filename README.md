@@ -184,7 +184,6 @@ From `backend`:
 npm test           # Unit tests (Jest)
 npm run test:cov   # Coverage
 npm run test:watch # Watch mode
-npm run test:e2e   # E2E tests (see test/jest-e2e.json)
 ```
 
 Highlights:
