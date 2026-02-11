@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, In, Repository } from 'typeorm';
 import { Book } from './book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { SearchBooksDto } from './dto/search-books.dto';
+import { LoggerService } from '../../common/logger/logger.service';
 
 export type PaginatedBooksResult = {
   data: Book[];
@@ -19,6 +20,7 @@ export class BooksService {
   constructor(
     @InjectRepository(Book)
     private readonly booksRepo: Repository<Book>,
+    private readonly logger: LoggerService,
   ) {}
 
   async create(dto: CreateBookDto, coverImagePath?: string): Promise<Book> {
@@ -30,6 +32,7 @@ export class BooksService {
       coverImagePath,
     });
     const saved = await this.booksRepo.save(book);
+
     return saved;
   }
 
@@ -38,7 +41,7 @@ export class BooksService {
     const page = Math.max(1, search?.page ?? 1);
     const limit = Math.min(100, Math.max(1, search?.limit ?? 10));
     const result = await this.findAllFromDb(q, page, limit);
-    
+
     return result;
   }
 

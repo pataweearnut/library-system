@@ -23,6 +23,10 @@ import { BooksService } from './books.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { SearchBooksDto } from './dto/search-books.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Role } from '../../common/enums/role.enum';
 import { SingleFileUploadInterceptor } from '../../common/interceptors/single-file-upload.interceptor';
 
 export const COVER_FIELD_NAME = 'cover';
@@ -50,11 +54,13 @@ const apiBodyWithOptionalCover = {
 
 @ApiTags('books')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('books')
 export class BooksController {
   constructor(private readonly booksService: BooksService) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.LIBRARIAN)
   @UseInterceptors(SingleFileUploadInterceptor)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a new book (admin/librarian)' })
@@ -94,6 +100,7 @@ export class BooksController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN, Role.LIBRARIAN)
   @UseInterceptors(SingleFileUploadInterceptor)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Update a book (admin/librarian)' })
