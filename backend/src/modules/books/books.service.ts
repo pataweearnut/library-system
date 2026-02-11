@@ -5,7 +5,11 @@ import { Book } from './book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { SearchBooksDto } from './dto/search-books.dto';
+import { RedisService } from '../../infrastructure/redis/redis.service';
 import { LoggerService } from '../../common/logger/logger.service';
+
+const BOOKS_CACHE_TTL_SEC = 60;
+const AVAILABILITY_SELECT = ['id', 'availableQuantity'] as const;
 
 export type PaginatedBooksResult = {
   data: Book[];
@@ -20,6 +24,7 @@ export class BooksService {
   constructor(
     @InjectRepository(Book)
     private readonly booksRepo: Repository<Book>,
+    private readonly redis: RedisService,
     private readonly logger: LoggerService,
   ) {}
 
@@ -32,7 +37,7 @@ export class BooksService {
       coverImagePath,
     });
     const saved = await this.booksRepo.save(book);
-
+    void this.redis.invalidateBooksCache();
     return saved;
   }
 
@@ -40,8 +45,69 @@ export class BooksService {
     const q = search?.q?.trim() ?? '';
     const page = Math.max(1, search?.page ?? 1);
     const limit = Math.min(100, Math.max(1, search?.limit ?? 10));
-    const result = await this.findAllFromDb(q, page, limit);
+    const cacheKey = this.buildCacheKey(q, page, limit);
 
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      try {
+        const result = JSON.parse(cached) as PaginatedBooksResult;
+        return this.mergeFreshAvailability(result);
+      } catch (err) {
+        this.logger.warn(
+          BooksService.name,
+          `Books cache invalid or corrupted for key "${cacheKey}", falling back to DB: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    const result = await this.findAllFromDb(q, page, limit);
+    const toStore = this.stripAvailabilityForCache(result);
+    await this.redis.set(
+      cacheKey,
+      JSON.stringify(toStore),
+      BOOKS_CACHE_TTL_SEC,
+    );
+    return result;
+  }
+
+  private buildCacheKey(q: string, page: number, limit: number): string {
+    return q.length > 0
+      ? `books:search:${q.toLowerCase()}:${page}:${limit}`
+      : `books:list:${page}:${limit}`;
+  }
+
+  /** Cache stores books without availability to keep payload small and semantics clear. */
+  private stripAvailabilityForCache(result: PaginatedBooksResult): {
+    data: Omit<Book, 'availableQuantity'>[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  } {
+    return {
+      ...result,
+      data: result.data.map(({ availableQuantity: _, ...book }) => ({
+        ...book,
+      })),
+    };
+  }
+
+  /** Refetch availableQuantity from DB; availability is never served from cache. */
+  private async mergeFreshAvailability(
+    result: PaginatedBooksResult,
+  ): Promise<PaginatedBooksResult> {
+    if (result.data.length === 0) return result;
+    const ids = result.data.map((b) => b.id);
+    const fresh = await this.booksRepo.find({
+      where: { id: In(ids) },
+      select: [...AVAILABILITY_SELECT],
+    });
+    const availabilityById = new Map(
+      fresh.map((b) => [b.id, b.availableQuantity]),
+    );
+    for (const book of result.data) {
+      book.availableQuantity = availabilityById.get(book.id) ?? 0;
+    }
     return result;
   }
 
@@ -103,7 +169,7 @@ export class BooksService {
     }
 
     const saved = await this.booksRepo.save(book);
-
+    void this.redis.invalidateBooksCache();
     return saved;
   }
 
