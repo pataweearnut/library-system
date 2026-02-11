@@ -22,10 +22,6 @@ export class BorrowingsService {
     private readonly dataSource: DataSource,
     @InjectRepository(Borrowing)
     private readonly borrowRepo: Repository<Borrowing>,
-    @InjectRepository(Book)
-    private readonly booksRepo: Repository<Book>,
-    @InjectRepository(User)
-    private readonly usersRepo: Repository<User>,
   ) {}
 
   async borrow(userId: string, dto: BorrowBookDto) {

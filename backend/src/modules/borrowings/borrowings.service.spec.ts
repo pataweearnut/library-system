@@ -150,6 +150,99 @@ describe('BorrowingsService', () => {
         service.borrow('missing-user', { bookId: mockBook.id }),
       ).rejects.toThrow('User not found');
     });
+
+    it('uses pessimistic write lock when loading book', async () => {
+      const { manager } = createMockManager();
+
+      (dataSource.transaction as jest.Mock).mockImplementation(
+        async (cb: (m: any) => Promise<any>) => {
+          const book = { ...mockBook, availableQuantity: 1 };
+
+          manager.findOne
+            .mockResolvedValueOnce(book) // book
+            .mockResolvedValueOnce(mockUser); // user
+          manager.create.mockReturnValue(mockBorrowing);
+          manager.save.mockImplementation((entity: any) => Promise.resolve(entity));
+
+          return cb(manager);
+        },
+      );
+
+      await service.borrow('user-1', { bookId: mockBook.id });
+
+      expect(manager.findOne).toHaveBeenCalledWith(
+        Book,
+        expect.objectContaining({
+          where: { id: mockBook.id },
+          lock: { mode: 'pessimistic_write' },
+        }),
+      );
+    });
+
+    it('handles two concurrent borrow requests correctly', async () => {
+      // shared "database" state for this test
+      const bookState = { ...mockBook, availableQuantity: 1 };
+
+      // simple in-test "lock": queue transactions so they execute one after another,
+      // simulating how a DB serializes pessimistic-locked operations on the same row
+      let queue = Promise.resolve();
+
+      (dataSource.transaction as jest.Mock).mockImplementation(
+        (cb: (m: any) => Promise<any>) => {
+          const run = async () => {
+            const { manager } = createMockManager();
+
+            manager.findOne.mockImplementation(
+              async (entity: any, options?: { where?: any }) => {
+                if (entity === Book) {
+                  // simulate SELECT ... FOR UPDATE returning current book row
+                  if (options?.where?.id === bookState.id) {
+                    return { ...bookState };
+                  }
+                }
+                if (entity === User) {
+                  return mockUser;
+                }
+                return null;
+              },
+            );
+
+            manager.save.mockImplementation(async (entity: any) => {
+              // simulate persisting updated quantity
+              if ('availableQuantity' in entity && entity.id === bookState.id) {
+                bookState.availableQuantity = entity.availableQuantity;
+              }
+              return entity;
+            });
+
+            manager.create.mockReturnValue(mockBorrowing);
+
+            return cb(manager);
+          };
+
+          queue = queue.then(run);
+          return queue;
+        },
+      );
+
+      const [r1, r2] = await Promise.allSettled([
+        service.borrow('user-1', { bookId: mockBook.id }),
+        service.borrow('user-1', { bookId: mockBook.id }),
+      ]);
+
+      const fulfilled = [r1, r2].filter((r) => r.status === 'fulfilled');
+      const rejected = [r1, r2].filter((r) => r.status === 'rejected');
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(
+        (rejected[0] as PromiseRejectedResult).reason,
+      ).toBeInstanceOf(BadRequestException);
+      expect(
+        (rejected[0] as PromiseRejectedResult).reason.message,
+      ).toBe('No copies available');
+      expect(bookState.availableQuantity).toBe(0);
+    });
   });
 
   describe('return', () => {
@@ -225,6 +318,94 @@ describe('BorrowingsService', () => {
       });
       expect(result).toBeDefined();
       expect(result.returnedAt).toBeDefined();
+    });
+
+    it('sets pessimistic write lock on borrowing row', async () => {
+      const borrowingWithUser = {
+        ...mockBorrowing,
+        user: mockUser,
+        returnedAt: undefined,
+        book: { ...mockBook, availableQuantity: 0 },
+      };
+
+      const { manager, getOne } = createMockManager();
+
+      (dataSource.transaction as jest.Mock).mockImplementation(
+        async (cb: (m: any) => Promise<any>) => {
+          getOne.mockResolvedValue(borrowingWithUser);
+          manager.save.mockImplementation((entity: any) => Promise.resolve(entity));
+          return cb(manager);
+        },
+      );
+
+      const qb = manager.createQueryBuilder();
+
+      await service.return('user-1', {
+        borrowingId: mockBorrowing.id,
+      });
+
+      expect(qb.setLock).toHaveBeenCalledWith('pessimistic_write');
+    });
+
+    it('handles two concurrent return requests correctly', async () => {
+      // shared "database" state for this test
+      const borrowingState = {
+        ...mockBorrowing,
+        user: mockUser,
+        returnedAt: undefined,
+        book: { ...mockBook, availableQuantity: 0 },
+      };
+
+      // simple in-test "lock": queue transactions so they execute one after another,
+      // simulating how a DB serializes pessimistic-locked operations on the same row
+      let queue = Promise.resolve();
+
+      (dataSource.transaction as jest.Mock).mockImplementation(
+        (cb: (m: any) => Promise<any>) => {
+          const run = async () => {
+            const { manager, getOne } = createMockManager();
+
+            getOne.mockImplementation(async () => ({ ...borrowingState }));
+
+            manager.save.mockImplementation(async (entity: any) => {
+              if ('returnedAt' in entity && entity.id === borrowingState.id) {
+                borrowingState.returnedAt = entity.returnedAt;
+              }
+              if (
+                'availableQuantity' in entity &&
+                entity.id === borrowingState.book.id
+              ) {
+                borrowingState.book.availableQuantity = entity.availableQuantity;
+              }
+              return entity;
+            });
+
+            return cb(manager);
+          };
+
+          queue = queue.then(run);
+          return queue;
+        },
+      );
+
+      const [r1, r2] = await Promise.allSettled([
+        service.return('user-1', { borrowingId: mockBorrowing.id }),
+        service.return('user-1', { borrowingId: mockBorrowing.id }),
+      ]);
+
+      const fulfilled = [r1, r2].filter((r) => r.status === 'fulfilled');
+      const rejected = [r1, r2].filter((r) => r.status === 'rejected');
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(
+        (rejected[0] as PromiseRejectedResult).reason,
+      ).toBeInstanceOf(BadRequestException);
+      expect(
+        (rejected[0] as PromiseRejectedResult).reason.message,
+      ).toBe('Already returned');
+      expect(borrowingState.returnedAt).toBeDefined();
+      expect(borrowingState.book.availableQuantity).toBe(1);
     });
   });
 
