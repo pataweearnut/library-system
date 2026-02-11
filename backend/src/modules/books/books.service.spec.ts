@@ -7,7 +7,6 @@ import { Book } from './book.entity';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { LoggerService } from '../../common/logger/logger.service';
 import { CreateBookDto } from './dto/create-book.dto';
-import { UpdateBookDto } from './dto/update-book.dto';
 
 describe('BooksService', () => {
   let service: BooksService;
@@ -227,7 +226,9 @@ describe('BooksService', () => {
 
       const result = await service.findOne('book-1');
 
-      expect(booksRepo.findOne).toHaveBeenCalledWith({ where: { id: 'book-1' } });
+      expect(booksRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'book-1' },
+      });
       expect(result).toEqual(mockBook);
     });
   });
@@ -251,7 +252,9 @@ describe('BooksService', () => {
         availableQuantity: 0,
       };
       booksRepo.findOne.mockResolvedValue(bookWithZero as Book);
-      booksRepo.save.mockImplementation((entity: Book) => Promise.resolve(entity));
+      booksRepo.save.mockImplementation((entity: Book) =>
+        Promise.resolve(entity),
+      );
 
       await service.update('book-1', { totalQuantity: 10 });
 
@@ -267,7 +270,9 @@ describe('BooksService', () => {
         availableQuantity: 8,
       };
       booksRepo.findOne.mockResolvedValue(book as Book);
-      booksRepo.save.mockImplementation((entity: Book) => Promise.resolve(entity));
+      booksRepo.save.mockImplementation((entity: Book) =>
+        Promise.resolve(entity),
+      );
 
       await service.update('book-1', { totalQuantity: 6 });
 
@@ -278,7 +283,9 @@ describe('BooksService', () => {
 
     it('sets coverImagePath when provided', async () => {
       booksRepo.findOne.mockResolvedValue(mockBook);
-      booksRepo.save.mockImplementation((entity: Book) => Promise.resolve(entity));
+      booksRepo.save.mockImplementation((entity: Book) =>
+        Promise.resolve(entity),
+      );
 
       await service.update('book-1', {}, 'uploads/new-cover.jpg');
 
@@ -296,9 +303,9 @@ describe('BooksService', () => {
         .mockResolvedValueOnce(current)
         .mockResolvedValueOnce(other);
 
-      await expect(
-        service.update('book-1', { isbn: '222' }),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.update('book-1', { isbn: '222' })).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

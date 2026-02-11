@@ -35,30 +35,34 @@ describe('StorageService', () => {
         {
           provide: S3StorageService,
           useValue: {
-            upload: jest.fn().mockResolvedValue(
-              'https://bucket.s3.region.amazonaws.com/books/covers/cover.png',
-            ),
+            upload: jest
+              .fn()
+              .mockResolvedValue(
+                'https://bucket.s3.region.amazonaws.com/books/covers/cover.png',
+              ),
           },
         },
       ],
     }).compile();
 
     service = module.get(StorageService);
-    config = module.get(ConfigService) as jest.Mocked<ConfigService>;
-    local = module.get(LocalStorageService) as jest.Mocked<LocalStorageService>;
-    s3 = module.get(S3StorageService) as jest.Mocked<S3StorageService>;
+    config = module.get(ConfigService);
+    local = module.get(LocalStorageService);
+    s3 = module.get(S3StorageService);
 
     jest.clearAllMocks();
   });
 
   it('uses local storage when AWS config is missing', async () => {
     config.get.mockReturnValue(null);
+    const localUploadSpy = jest.spyOn(local, 'upload');
+    const s3UploadSpy = jest.spyOn(s3, 'upload');
 
     const result = await service.upload(mockFile);
 
     expect(config.get).toHaveBeenCalledWith('AWS_REGION');
-    expect(local.upload).toHaveBeenCalledWith(mockFile);
-    expect(s3.upload).not.toHaveBeenCalled();
+    expect(localUploadSpy).toHaveBeenCalledWith(mockFile);
+    expect(s3UploadSpy).not.toHaveBeenCalled();
     expect(result).toBe('uploads/local-cover.png');
   });
 
@@ -68,14 +72,15 @@ describe('StorageService', () => {
       if (key === 'AWS_S3_BUCKET') return 'my-bucket';
       return null;
     });
+    const localUploadSpy = jest.spyOn(local, 'upload');
+    const s3UploadSpy = jest.spyOn(s3, 'upload');
 
     const result = await service.upload(mockFile);
 
-    expect(s3.upload).toHaveBeenCalledWith(mockFile);
-    expect(local.upload).not.toHaveBeenCalled();
+    expect(s3UploadSpy).toHaveBeenCalledWith(mockFile);
+    expect(localUploadSpy).not.toHaveBeenCalled();
     expect(result).toBe(
       'https://bucket.s3.region.amazonaws.com/books/covers/cover.png',
     );
   });
 });
-

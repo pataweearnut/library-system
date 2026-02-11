@@ -3,7 +3,6 @@ import {
   Catch,
   ExceptionFilter,
   HttpException,
-  HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { LoggerService } from '../logger/logger.service';
@@ -13,24 +12,29 @@ interface IError {
   code_error: string | null;
 }
 
+const INTERNAL_SERVER_ERROR_CODE = 500;
+
 @Catch()
 export class AllExceptionFilter implements ExceptionFilter {
   constructor(private readonly logger: LoggerService) {}
 
-  catch(exception: any, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const request: Request = ctx.getRequest();
-    const response: Response = ctx.getResponse();
+    const request = ctx.getRequest<Request>();
+    const response = ctx.getResponse<Response>();
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+        : INTERNAL_SERVER_ERROR_CODE;
     const message =
       exception instanceof HttpException
         ? (exception.getResponse() as IError)
-        : { message: (exception as Error).message, code_error: null };
+        : {
+            message: exception instanceof Error ? exception.message : 'Error',
+            code_error: null,
+          };
 
-    const isServerError = status >= HttpStatus.INTERNAL_SERVER_ERROR;
+    const isServerError = status >= INTERNAL_SERVER_ERROR_CODE;
     const responseData = {
       statusCode: status,
       timestamp: new Date().toISOString(),
@@ -45,25 +49,26 @@ export class AllExceptionFilter implements ExceptionFilter {
   }
 
   private logMessage(
-    request: any,
+    request: Request,
     message: IError,
     status: number,
-    exception: any,
+    exception: unknown,
   ) {
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    const stack = exception instanceof Error ? exception.stack : undefined;
+    if (status >= INTERNAL_SERVER_ERROR_CODE) {
       this.logger.error(
         `End Request for ${request.url}`,
         `method=${request.method} status=${status} code_error=${
-          message.code_error ? message.code_error : null
-        } message=${message.message ? message.message : null}`,
-        status >= 500 ? exception.stack : '',
+          message.code_error ?? null
+        } message=${message.message ?? null}`,
+        stack ?? '',
       );
     } else {
       this.logger.warn(
         `End Request for ${request.url}`,
         `method=${request.method} status=${status} code_error=${
-          message.code_error ? message.code_error : null
-        } message=${message.message ? message.message : null}`,
+          message.code_error ?? null
+        } message=${message.message ?? null}`,
       );
     }
   }

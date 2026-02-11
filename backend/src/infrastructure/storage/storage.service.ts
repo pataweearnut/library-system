@@ -13,11 +13,8 @@ export class StorageService {
 
   async upload(file: Express.Multer.File): Promise<string | null> {
     const useS3 =
-      !!this.config.get('AWS_REGION') &&
-      !!this.config.get('AWS_S3_BUCKET');
+      !!this.config.get('AWS_REGION') && !!this.config.get('AWS_S3_BUCKET');
 
-    return useS3
-      ? this.s3.upload(file)
-      : this.local.upload(file);
+    return useS3 ? this.s3.upload(file) : this.local.upload(file);
   }
 }

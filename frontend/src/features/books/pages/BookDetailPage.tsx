@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../../../shared/api/client'
-import { useAuth } from '../../auth/context/AuthContext'
+import { useAuth } from '../../auth/context/useAuth'
 
 type Book = {
   id: string

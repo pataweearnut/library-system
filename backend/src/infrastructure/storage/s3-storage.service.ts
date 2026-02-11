@@ -17,14 +17,14 @@ export class S3StorageService implements StorageProvider {
     if (region && bucket) {
       this.region = region;
       this.bucket = bucket;
+      const accessKeyId = this.config.get<string>('AWS_ACCESS_KEY_ID');
+      const secretAccessKey = this.config.get<string>('AWS_SECRET_ACCESS_KEY');
       this.client = new S3Client({
         region,
-        ...(this.config.get('AWS_ACCESS_KEY_ID') && {
-          credentials: {
-            accessKeyId: this.config.get<string>('AWS_ACCESS_KEY_ID')!,
-            secretAccessKey: this.config.get<string>('AWS_SECRET_ACCESS_KEY')!,
-          },
-        }),
+        ...(accessKeyId &&
+          secretAccessKey && {
+            credentials: { accessKeyId, secretAccessKey },
+          }),
       });
     }
   }

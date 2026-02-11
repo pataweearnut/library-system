@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Request } from 'express';
 import { BorrowingsService } from './borrowings.service';
 import { BorrowBookDto } from './dto/borrow-book.dto';
 import { ReturnBookDto } from './dto/return-book.dto';
@@ -22,6 +23,10 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+
+interface RequestWithUser extends Request {
+  user: { userId: string };
+}
 
 @ApiTags('borrowings')
 @ApiBearerAuth()
@@ -39,7 +44,7 @@ export class BorrowingsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Book or user not found' })
-  borrow(@Req() req, @Body() dto: BorrowBookDto) {
+  borrow(@Req() req: RequestWithUser, @Body() dto: BorrowBookDto) {
     return this.borrowingsService.borrow(req.user.userId, dto);
   }
 
@@ -52,7 +57,7 @@ export class BorrowingsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Borrowing not found' })
-  return(@Req() req, @Body() dto: ReturnBookDto) {
+  return(@Req() req: RequestWithUser, @Body() dto: ReturnBookDto) {
     return this.borrowingsService.return(req.user.userId, dto);
   }
 
@@ -60,7 +65,10 @@ export class BorrowingsController {
   @ApiOperation({ summary: "Current user's active borrowings for a book" })
   @ApiResponse({ status: 200, description: 'List of active borrowings' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  myActiveBorrowings(@Req() req, @Param('bookId') bookId: string) {
+  myActiveBorrowings(
+    @Req() req: RequestWithUser,
+    @Param('bookId') bookId: string,
+  ) {
     return this.borrowingsService.myActiveBorrowingsForBook(
       req.user.userId,
       bookId,

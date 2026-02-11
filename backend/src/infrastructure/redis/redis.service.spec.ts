@@ -62,7 +62,6 @@ describe('RedisService', () => {
   describe('when REDIS_URL is set', () => {
     beforeEach(async () => {
       (config.get as jest.Mock).mockReturnValue('redis://localhost:6379');
-      const Redis = require('ioredis');
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           RedisService,

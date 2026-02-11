@@ -33,9 +33,11 @@ describe('AuthController', () => {
     it('calls authService.login and returns result', async () => {
       const dto: LoginDto = { email: 'a@b.com', password: 'pass' };
       const token = { accessToken: 'jwt-here' };
-      authService.login.mockResolvedValue(token);
+      const loginSpy = jest
+        .spyOn(authService, 'login')
+        .mockResolvedValue(token);
       const result = await controller.login(dto);
-      expect(authService.login).toHaveBeenCalledWith(dto);
+      expect(loginSpy).toHaveBeenCalledWith(dto);
       expect(result).toEqual(token);
     });
   });

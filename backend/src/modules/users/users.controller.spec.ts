@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
 import { Role } from '../../common/enums/role.enum';
 
 describe('UsersController', () => {
@@ -60,9 +61,11 @@ describe('UsersController', () => {
 
   describe('findOne', () => {
     it('returns safe user by id', async () => {
-      usersService.findOne.mockResolvedValue(mockUser);
+      const findOneSpy = jest
+        .spyOn(usersService, 'findOne')
+        .mockResolvedValue(mockUser);
       const result = await controller.findOne('user-1');
-      expect(usersService.findOne).toHaveBeenCalledWith('user-1');
+      expect(findOneSpy).toHaveBeenCalledWith('user-1');
       expect(result).not.toHaveProperty('passwordHash');
       expect(result.id).toBe(mockUser.id);
       expect(result.email).toBe(mockUser.email);
@@ -71,14 +74,16 @@ describe('UsersController', () => {
 
   describe('create', () => {
     it('creates user and returns safe shape', async () => {
-      usersService.create.mockResolvedValue(mockUser);
-      const dto = {
+      const dto: CreateUserDto = {
         email: 'new@example.com',
         password: 'secret',
         role: Role.LIBRARIAN,
       };
-      const result = await controller.create(dto as any);
-      expect(usersService.create).toHaveBeenCalledWith(dto);
+      const createSpy = jest
+        .spyOn(usersService, 'create')
+        .mockResolvedValue(mockUser);
+      const result = await controller.create(dto);
+      expect(createSpy).toHaveBeenCalledWith(dto);
       expect(result).not.toHaveProperty('passwordHash');
     });
   });
@@ -86,9 +91,11 @@ describe('UsersController', () => {
   describe('update', () => {
     it('updates user and returns safe shape', async () => {
       const updated = { ...mockUser, role: Role.ADMIN };
-      usersService.update.mockResolvedValue(updated as User);
+      const updateSpy = jest
+        .spyOn(usersService, 'update')
+        .mockResolvedValue(updated as User);
       const result = await controller.update('user-1', { role: Role.ADMIN });
-      expect(usersService.update).toHaveBeenCalledWith('user-1', {
+      expect(updateSpy).toHaveBeenCalledWith('user-1', {
         role: Role.ADMIN,
       });
       expect(result.role).toBe(Role.ADMIN);

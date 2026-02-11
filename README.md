@@ -1,0 +1,268 @@
+# Library System
+
+A full-stack library management app built for the **“Book Library Management Challenge (Senior Edition)”**.
+
+- **Backend**: NestJS (TypeScript), PostgreSQL, TypeORM, JWT, Swagger.
+- **Frontend**: React + TypeScript, Vite, Tailwind, React Router, Axios.
+
+It implements all **core user stories** and most **advanced senior-level stories**, with a focus on **clear API design, concurrency safety, and test coverage**.
+
+---
+
+## 1. How this project maps to the assignment
+
+### Core user stories
+
+- **Authentication required**  
+  - Implemented via JWT in the backend (`auth` module + `JwtStrategy`) and `AuthContext` + route guards in the frontend (`PrivateRoute`, `AdminRoute`).
+
+- **Add new book (title, author, ISBN, year, cover image)**  
+  - Backend `BooksModule` exposes CRUD endpoints accepting DTOs with those fields and optional cover file (multipart upload).  
+  - Frontend `AddBookPage` provides a form including cover upload.
+
+- **View list of all books**  
+  - Backend: `GET /api/books` with optional filters.  
+  - Frontend: `BooksListPage` displays paginated/filterable list.
+
+- **Search by title or author**  
+  - Backend supports query parameters (title/author) in the books list endpoint.  
+  - Frontend search bar calls that endpoint as the user filters.
+
+- **View book detail**  
+  - Backend: `GET /api/books/:id`.  
+  - Frontend: `BookDetailPage`.
+
+- **Update book**  
+  - Backend: `PATCH /api/books/:id`.  
+  - Frontend: `BookEditPage`.
+
+- **Borrow a book (decrement available quantity)**  
+  - Backend: `BorrowingsService.borrow` runs in a DB transaction and pessimistically locks the book row before decrementing `availableQuantity`.  
+  - Frontend: borrow actions from book detail or list.
+
+- **Return a book (increment available quantity)**  
+  - Backend: `BorrowingsService.return` locks the borrowing row and increments the book’s `availableQuantity`.  
+  - Frontend: return actions via the user’s active borrowings view.
+
+### Advanced (senior) user stories
+
+- **Admin manages users and roles (admin, librarian, member)**  
+  - Backend: `UsersModule` with role field (`Role` enum: `admin`, `librarian`, `member`) and role-based guards.  
+  - Frontend: `UsersPage` behind `AdminRoute`.
+
+- **Librarian views borrowing history & most borrowed books**  
+  - Backend: `BorrowingsService.historyForBook` and `mostBorrowed` queries.  
+  - Frontend: librarian views can call those endpoints (API-ready).
+
+- **Safe concurrent borrowing**  
+  - Backend: `BorrowingsService` uses **TypeORM transactions with pessimistic write locks** on the relevant rows; unit tests include “two concurrent requests” simulations that verify correct behavior (only one succeeds).
+
+- **Clear API documentation**  
+  - Backend: Swagger at `http://localhost:3000/api/docs` via `DocumentBuilder` + `SwaggerModule`.
+
+---
+
+## 2. Tech stack & architecture
+
+### Backend
+
+- **NestJS** with modular architecture:
+  - `modules/auth`: login, JWT issuing, `JwtStrategy`.
+  - `modules/users`: user CRUD, role management.
+  - `modules/books`: book CRUD, search/filter.
+  - `modules/borrowings`: borrow/return, history, most borrowed, concurrency-safe logic.
+  - `common`: global validation pipe, exception filter, logging interceptor, role guard, JWT guard.
+  - `database`: TypeORM configuration + seed scripts.
+  - `infrastructure`: Redis module, storage abstraction (local/S3) for cover images.
+- **Database**: PostgreSQL via TypeORM (`User`, `Book`, `Borrowing` entities).
+- **Auth**: JWT bearer tokens, RBAC via a `Role` enum and guards.
+- **File upload**: Nest + Multer; optional S3 integration through `StorageProvider`.
+- **API style**: REST with OpenAPI/Swagger.
+
+### Frontend
+
+- **React + TypeScript** with Vite.
+- **Routing**: `react-router-dom` with:
+  - `PrivateRoute` for authenticated routes.
+  - `AdminRoute` for admin-only pages.
+- **State / auth**: `AuthContext` that stores JWT in `localStorage` and injects it via Axios interceptor.
+- **UI**: Tailwind-based views for login, books, and users; `react-hot-toast` for feedback.
+- **API client**: `shared/api/client.ts` with base URL from `VITE_API_BASE_URL` and 401 handling (auto logout + redirect).
+
+---
+
+## 3. Setup & running
+
+### Prerequisites
+
+- **Node.js** 18+ (LTS)
+- **PostgreSQL** 14+ (local or remote)
+- **npm** (or pnpm/yarn)
+
+### Environment configuration
+
+#### Backend (`backend/.env`)
+
+Use `backend/.env.example` as a starting point.
+
+Key variables:
+
+| Variable | Description | Default / note |
+|----------|-------------|----------------|
+| `LIBRARY_SERVICE_CONNECTION` | Bind host | `0.0.0.0` |
+| `LIBRARY_SERVICE_PORT` | API port | `3000` |
+| `LIBRARY_SERVICE_CORS_ORIGIN` | Allowed frontend origin | `http://localhost:5173` |
+| `LIBRARY_SERVICE_DB_HOST` | PostgreSQL host | `localhost` |
+| `LIBRARY_SERVICE_DB_PORT` | PostgreSQL port | `5432` |
+| `LIBRARY_SERVICE_DB_USER` | DB user | `postgres` |
+| `LIBRARY_SERVICE_DB_PASS` | DB password | `postgres` |
+| `LIBRARY_SERVICE_DB_NAME` | DB name | `library_db` |
+| `JWT_SECRET` | JWT signing secret | `dev-secret` (override in prod) |
+| `REDIS_URL` | Redis connection | Optional |
+| `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 config | Optional; if unset, covers stay local/optional |
+
+Create the DB once:
+
+```bash
+createdb library_db
+```
+
+#### Frontend (`frontend/.env`)
+
+```env
+VITE_API_BASE_URL=http://localhost:3000/api
+```
+
+### Install & run
+
+#### Backend
+
+```bash
+cd backend
+cp .env.example .env
+# Edit .env as needed
+npm install
+npm run start:dev
+```
+
+- API base: `http://localhost:3000/api`
+- Swagger: `http://localhost:3000/api/docs`
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+- App: `http://localhost:5173`
+
+### Seed data
+
+From `backend`:
+
+```bash
+# 1. Users (admin, librarian, member — password: password123)
+npm run seed:users
+
+# 2. Books (sample tech library, idempotent by ISBN)
+npm run seed:books
+```
+
+Example login: `admin@example.com` / `password123`.
+
+---
+
+## 4. Testing
+
+### Backend
+
+From `backend`:
+
+```bash
+npm test           # Unit tests (Jest)
+npm run test:cov   # Coverage
+npm run test:watch # Watch mode
+npm run test:e2e   # E2E tests (see test/jest-e2e.json)
+```
+
+Highlights:
+
+- Unit tests for auth, users, books, borrowings, and infrastructure (Redis, storage).
+- Borrow/return tests cover:
+  - Error paths (no copies, user not found, already returned, wrong user).
+  - Use of pessimistic write locks on book/borrowing rows.
+  - Simulated concurrent borrow/return requests where only one succeeds.
+
+### Frontend
+
+From `frontend`:
+
+```bash
+npm run lint
+```
+
+No frontend test runner is wired by default; Vitest/RTL can be added if needed.
+
+---
+
+## 5. Concurrency & race-condition handling
+
+- **Borrow** (`BorrowingsService.borrow`):
+  - Runs inside a database transaction via `DataSource.transaction`.
+  - Loads the book with `lock: { mode: 'pessimistic_write' }`, which becomes `SELECT ... FOR UPDATE` in PostgreSQL.
+  - Checks `availableQuantity` and decrements it before persisting.
+  - With two concurrent borrows for the same book:
+    - One transaction acquires the lock, decrements, and commits.
+    - The second waits, then sees the updated quantity and fails with `"No copies available"` if none remain.
+
+- **Return** (`BorrowingsService.return`):
+  - Fetches the borrowing row via query builder with `setLock('pessimistic_write')`.
+  - Ensures:
+    - Borrowing exists.
+    - Not already returned.
+    - Belongs to the requesting user.
+  - Sets `returnedAt` and increments the book quantity.
+  - Concurrent returns for the same borrowing:
+    - First wins and marks it returned.
+    - Second sees `"Already returned"` and fails.
+
+This design pushes concurrency control to the **database**, which is the right place to guarantee consistency under real multi-process load.
+
+---
+
+## 6. Production improvements & trade-offs
+
+### What to improve for real-world production
+
+- **Database & schema**
+  - Turn off TypeORM `synchronize` and use migrations.
+  - Apply connection pooling, backups, and (if needed) replicas.
+
+- **Security**
+  - Strong `JWT_SECRET` and environment-specific config.
+  - Rate limiting on login and sensitive endpoints.
+  - Consider using httpOnly cookies or short-lived access tokens + refresh tokens instead of storing JWT in `localStorage`.
+  - Enforce HTTPS and strict CORS.
+
+- **Observability**
+  - Centralized structured logs.
+  - Metrics + health checks (e.g. `/api/health`).
+  - Tracing across services if the system grows.
+
+- **Storage**
+  - Use S3 (or similar) in production for covers; avoid purely local disk.
+
+- **DevOps**
+  - Add Docker/Docker Compose for full-stack local setup (API, DB, Redis, frontend).
+  - CI pipeline (GitHub Actions) to run lint, tests, and build.
+
+### Key trade-offs made here
+
+- **TypeORM `synchronize: true`** for fast iteration vs. migrations for safe schema evolution.
+- **JWT in `localStorage`** for simplicity vs. more secure cookie-based tokens.
+- **Pessimistic locking** for borrow/return (simple, robust) vs. optimistic locking (better throughput but more complex conflict handling).
+- **Monorepo (frontend + backend)** for clarity vs. separate repos for independent deployment pipelines.
+
+These choices favor **clarity and speed for an assignment** while keeping a clear path to hardening the system for production.

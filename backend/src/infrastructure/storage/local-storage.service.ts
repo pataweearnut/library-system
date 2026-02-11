@@ -11,6 +11,7 @@ export class LocalStorageService implements StorageProvider {
     if (!file) return null;
 
     const dest = join(process.cwd(), this.uploadsDir);
+    await Promise.resolve(); // allow sync work in async method for interface compliance
     mkdirSync(dest, { recursive: true });
 
     const filename = `${Date.now()}-${file.originalname}`;

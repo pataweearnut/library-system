@@ -6,8 +6,6 @@ import { BorrowingsService } from './borrowings.service';
 import { Borrowing } from './borrowing.entity';
 import { Book } from '../books/book.entity';
 import { User } from '../users/user.entity';
-import { BorrowBookDto } from './dto/borrow-book.dto';
-import { ReturnBookDto } from './dto/return-book.dto';
 import { Role } from '../../common/enums/role.enum';
 
 describe('BorrowingsService', () => {
@@ -53,7 +51,7 @@ describe('BorrowingsService', () => {
   }
 
   beforeEach(async () => {
-    const { manager, getOne } = createMockManager();
+    const { manager } = createMockManager();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BorrowingsService,
@@ -125,7 +123,9 @@ describe('BorrowingsService', () => {
             .mockResolvedValueOnce(book)
             .mockResolvedValueOnce(mockUser);
           manager.create.mockReturnValue(mockBorrowing);
-          manager.save.mockImplementation((entity: any) => Promise.resolve(entity));
+          manager.save.mockImplementation((entity: any) =>
+            Promise.resolve(entity),
+          );
           return cb(manager);
         },
       );
@@ -162,7 +162,9 @@ describe('BorrowingsService', () => {
             .mockResolvedValueOnce(book) // book
             .mockResolvedValueOnce(mockUser); // user
           manager.create.mockReturnValue(mockBorrowing);
-          manager.save.mockImplementation((entity: any) => Promise.resolve(entity));
+          manager.save.mockImplementation((entity: any) =>
+            Promise.resolve(entity),
+          );
 
           return cb(manager);
         },
@@ -235,12 +237,8 @@ describe('BorrowingsService', () => {
 
       expect(fulfilled).toHaveLength(1);
       expect(rejected).toHaveLength(1);
-      expect(
-        (rejected[0] as PromiseRejectedResult).reason,
-      ).toBeInstanceOf(BadRequestException);
-      expect(
-        (rejected[0] as PromiseRejectedResult).reason.message,
-      ).toBe('No copies available');
+      expect(rejected[0].reason).toBeInstanceOf(BadRequestException);
+      expect(rejected[0].reason.message).toBe('No copies available');
       expect(bookState.availableQuantity).toBe(0);
     });
   });
@@ -309,7 +307,9 @@ describe('BorrowingsService', () => {
         async (cb: (m: any) => Promise<any>) => {
           const { manager, getOne } = createMockManager();
           getOne.mockResolvedValue(borrowingWithUser);
-          manager.save.mockImplementation((entity: any) => Promise.resolve(entity));
+          manager.save.mockImplementation((entity: any) =>
+            Promise.resolve(entity),
+          );
           return cb(manager);
         },
       );
@@ -333,7 +333,9 @@ describe('BorrowingsService', () => {
       (dataSource.transaction as jest.Mock).mockImplementation(
         async (cb: (m: any) => Promise<any>) => {
           getOne.mockResolvedValue(borrowingWithUser);
-          manager.save.mockImplementation((entity: any) => Promise.resolve(entity));
+          manager.save.mockImplementation((entity: any) =>
+            Promise.resolve(entity),
+          );
           return cb(manager);
         },
       );
@@ -375,7 +377,8 @@ describe('BorrowingsService', () => {
                 'availableQuantity' in entity &&
                 entity.id === borrowingState.book.id
               ) {
-                borrowingState.book.availableQuantity = entity.availableQuantity;
+                borrowingState.book.availableQuantity =
+                  entity.availableQuantity;
               }
               return entity;
             });
@@ -398,12 +401,8 @@ describe('BorrowingsService', () => {
 
       expect(fulfilled).toHaveLength(1);
       expect(rejected).toHaveLength(1);
-      expect(
-        (rejected[0] as PromiseRejectedResult).reason,
-      ).toBeInstanceOf(BadRequestException);
-      expect(
-        (rejected[0] as PromiseRejectedResult).reason.message,
-      ).toBe('Already returned');
+      expect(rejected[0].reason).toBeInstanceOf(BadRequestException);
+      expect(rejected[0].reason.message).toBe('Already returned');
       expect(borrowingState.returnedAt).toBeDefined();
       expect(borrowingState.book.availableQuantity).toBe(1);
     });
@@ -412,7 +411,10 @@ describe('BorrowingsService', () => {
   describe('myActiveBorrowingsForBook', () => {
     it('returns active borrowings for user and book', async () => {
       borrowRepo.find.mockResolvedValue([mockBorrowing]);
-      const result = await service.myActiveBorrowingsForBook('user-1', 'book-1');
+      const result = await service.myActiveBorrowingsForBook(
+        'user-1',
+        'book-1',
+      );
       expect(borrowRepo.find).toHaveBeenCalledWith({
         where: {
           user: { id: 'user-1' },
@@ -466,9 +468,7 @@ describe('BorrowingsService', () => {
         limit: jest.fn().mockReturnThis(),
         getRawMany: jest
           .fn()
-          .mockResolvedValue([
-            { bookId: 'b1', title: 'T', borrowCount: '5' },
-          ]),
+          .mockResolvedValue([{ bookId: 'b1', title: 'T', borrowCount: '5' }]),
       };
       borrowRepo.createQueryBuilder.mockReturnValue(qb);
       const result = await service.mostBorrowed(10);

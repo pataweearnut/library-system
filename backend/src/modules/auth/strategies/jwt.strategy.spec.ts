@@ -34,7 +34,7 @@ describe('JwtStrategy', () => {
         email: 'u@example.com',
         role: 'member',
       };
-      const result = await strategy.validate(payload);
+      const result = strategy.validate(payload);
       expect(result).toEqual({
         userId: 'user-123',
         email: 'u@example.com',
@@ -57,8 +57,8 @@ describe('JwtStrategy', () => {
       strategy = module.get(JwtStrategy);
     });
 
-    it('uses dev-secret fallback', async () => {
-      const result = await strategy.validate({
+    it('uses dev-secret fallback', () => {
+      const result = strategy.validate({
         sub: 'id',
         email: 'e@x.com',
         role: 'member',

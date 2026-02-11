@@ -4,6 +4,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { LoggerService } from '../logger/logger.service';
@@ -12,10 +13,10 @@ import { LoggerService } from '../logger/logger.service';
 export class LoggingInterceptor implements NestInterceptor {
   constructor(private readonly logger: LoggerService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const now = Date.now();
     const httpContext = context.switchToHttp();
-    const request = httpContext.getRequest();
+    const request = httpContext.getRequest<Request>();
 
     const ip = this.getIP(request);
 
@@ -34,16 +35,14 @@ export class LoggingInterceptor implements NestInterceptor {
     );
   }
 
-  private getIP(request: any): string {
-    let ip: string;
+  private getIP(request: Request): string {
     const ipAddr = request.headers['x-forwarded-for'];
-    if (ipAddr) {
-      const list = ipAddr.split(',');
-      ip = list[list.length - 1];
-    } else {
-      ip = request.socket.remoteAddress;
-    }
-
-    return ip.replace('::ffff:', '');
+    const raw =
+      typeof ipAddr === 'string'
+        ? ipAddr
+        : Array.isArray(ipAddr)
+          ? ipAddr[ipAddr.length - 1]
+          : (request.socket?.remoteAddress ?? '');
+    return String(raw).replace('::ffff:', '');
   }
 }

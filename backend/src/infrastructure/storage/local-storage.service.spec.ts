@@ -44,4 +44,3 @@ describe('LocalStorageService', () => {
     expect(result).toContain('cover.png');
   });
 });
-

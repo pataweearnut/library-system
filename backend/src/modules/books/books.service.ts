@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Repository } from 'typeorm';
 import { Book } from './book.entity';
@@ -86,9 +90,7 @@ export class BooksService {
   } {
     return {
       ...result,
-      data: result.data.map(({ availableQuantity: _, ...book }) => ({
-        ...book,
-      })),
+      data: result.data.map(({ availableQuantity: _q, ...rest }) => rest),
     };
   }
 

@@ -5,8 +5,8 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
-import { CreateUserDto } from './create-user.dto';
-import { UpdateUserDto } from './update-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { Role } from '../../common/enums/role.enum';
 
 jest.mock('bcrypt');
@@ -67,12 +67,22 @@ describe('UsersService', () => {
         password: 'secret',
         role: Role.LIBRARIAN,
       };
-      const created = { ...mockUser, ...dto, passwordHash: 'hashed' };
-      usersRepo.create.mockReturnValue(created as User);
+      const created = {
+        ...mockUser,
+        email: dto.email,
+        role: dto.role,
+        passwordHash: 'hashed',
+      };
+      const hashSpy = jest
+        .spyOn(bcrypt, 'hash')
+        .mockResolvedValue('hashed' as never);
+      const createSpy = jest
+        .spyOn(usersRepo, 'create')
+        .mockReturnValue(created as User);
       usersRepo.save.mockResolvedValue(created as User);
       const result = await service.create(dto);
-      expect(bcrypt.hash).toHaveBeenCalledWith('secret', 10);
-      expect(usersRepo.create).toHaveBeenCalledWith({
+      expect(hashSpy).toHaveBeenCalledWith('secret', 10);
+      expect(createSpy).toHaveBeenCalledWith({
         email: dto.email,
         passwordHash: 'hashed',
         role: dto.role,
@@ -83,9 +93,11 @@ describe('UsersService', () => {
 
   describe('findAll', () => {
     it('returns users ordered by createdAt DESC', async () => {
-      usersRepo.find.mockResolvedValue([mockUser]);
+      const findSpy = jest
+        .spyOn(usersRepo, 'find')
+        .mockResolvedValue([mockUser]);
       const result = await service.findAll();
-      expect(usersRepo.find).toHaveBeenCalledWith({
+      expect(findSpy).toHaveBeenCalledWith({
         order: { createdAt: 'DESC' },
       });
       expect(result).toEqual([mockUser]);
@@ -95,8 +107,12 @@ describe('UsersService', () => {
   describe('findOne', () => {
     it('throws when user not found', async () => {
       usersRepo.findOne.mockResolvedValue(null);
-      await expect(service.findOne('missing')).rejects.toThrow(NotFoundException);
-      await expect(service.findOne('missing')).rejects.toThrow('User not found');
+      await expect(service.findOne('missing')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.findOne('missing')).rejects.toThrow(
+        'User not found',
+      );
     });
 
     it('returns user when found', async () => {
@@ -110,19 +126,23 @@ describe('UsersService', () => {
     it('updates role when provided', async () => {
       usersRepo.findOne.mockResolvedValue(mockUser);
       const updated = { ...mockUser, role: Role.ADMIN };
-      usersRepo.save.mockResolvedValue(updated as User);
+      const saveSpy = jest
+        .spyOn(usersRepo, 'save')
+        .mockResolvedValue(updated as User);
       const dto: UpdateUserDto = { role: Role.ADMIN };
       const result = await service.update(mockUser.id, dto);
-      expect(mockUser.role).toBe(Role.ADMIN);
-      expect(usersRepo.save).toHaveBeenCalledWith(mockUser);
+      expect(result.role).toBe(Role.ADMIN);
+      expect(saveSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: mockUser.id, role: Role.ADMIN }),
+      );
       expect(result).toEqual(updated);
     });
 
     it('does not change role when dto.role is undefined', async () => {
       usersRepo.findOne.mockResolvedValue(mockUser);
-      usersRepo.save.mockResolvedValue(mockUser);
+      const saveSpy = jest.spyOn(usersRepo, 'save').mockResolvedValue(mockUser);
       const result = await service.update(mockUser.id, {});
-      expect(usersRepo.save).toHaveBeenCalledWith(mockUser);
+      expect(saveSpy).toHaveBeenCalledWith(mockUser);
       expect(result).toEqual(mockUser);
     });
   });

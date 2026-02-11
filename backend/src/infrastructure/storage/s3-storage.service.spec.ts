@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { S3StorageService } from './s3-storage.service';
 
 jest.mock('@aws-sdk/client-s3', () => ({
@@ -82,4 +81,3 @@ describe('S3StorageService', () => {
     });
   });
 });
-

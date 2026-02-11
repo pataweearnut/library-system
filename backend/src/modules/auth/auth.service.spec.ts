@@ -59,21 +59,18 @@ describe('AuthService', () => {
 
     it('returns null when password does not match', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      const compareSpy = jest.spyOn(bcrypt, 'compare').mockResolvedValue(false);
       const result = await service.validateUser(mockUser.email, 'wrong');
       expect(result).toBeNull();
-      expect(bcrypt.compare).toHaveBeenCalledWith('wrong', mockUser.passwordHash);
+      expect(compareSpy).toHaveBeenCalledWith('wrong', mockUser.passwordHash);
     });
 
     it('returns user when credentials are valid', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      const compareSpy = jest.spyOn(bcrypt, 'compare').mockResolvedValue(true);
       const result = await service.validateUser(mockUser.email, 'correct');
       expect(result).toEqual(mockUser);
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        'correct',
-        mockUser.passwordHash,
-      );
+      expect(compareSpy).toHaveBeenCalledWith('correct', mockUser.passwordHash);
     });
   });
 

@@ -1,32 +1,7 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import api from '../../../shared/api/client'
-
-type UserInfo = {
-  email: string
-  role: 'admin' | 'librarian' | 'member'
-} | null
-
-function userFromToken(token: string | null): UserInfo {
-  if (!token) return null
-  try {
-    const [, payloadBase64] = token.split('.')
-    const payloadJson = atob(payloadBase64)
-    const payload = JSON.parse(payloadJson)
-    return { email: payload.email, role: payload.role }
-  } catch {
-    return null
-  }
-}
-
-type AuthContextValue = {
-  token: string | null
-  user: UserInfo
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+import { AuthContext, userFromToken } from './auth-context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
@@ -55,12 +30,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   )
 }
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
-  return ctx
-}
-

@@ -4,7 +4,7 @@ import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
 function toNumber(value: unknown): number {
   // Handle arrays from multipart/form-data (e.g. ['2024'])
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw: unknown = Array.isArray(value) ? value[0] : value;
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
@@ -31,19 +31,19 @@ export class CreateBookDto {
   isbn: string;
 
   @ApiProperty()
-  @Transform(({ value }) => toNumber(value))
+  @Transform(({ value }: { value: unknown }) => toNumber(value))
   @IsInt()
   publicationYear: number;
 
   @ApiProperty()
-  @Transform(({ value }) => toNumber(value))
+  @Transform(({ value }: { value: unknown }) => toNumber(value))
   @IsInt()
   @Min(0)
   totalQuantity: number;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === undefined || value === '' ? undefined : toNumber(value),
   )
   @IsInt()
