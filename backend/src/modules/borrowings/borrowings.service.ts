@@ -11,10 +11,17 @@ import { ReturnBookDto } from './dto/return-book.dto';
 import { Book } from '../books/book.entity';
 import { User } from '../users/user.entity';
 
+type UpdatedBorrowingRow = {
+  id: string;
+  bookId: string;
+};
+
 /**
  * Concurrent borrow/return is safe: operations run inside database transactions
- * with pessimistic write locks on the book (borrow) and on the borrowing row (return),
- * so multiple users borrowing the same book at the same time do not cause inconsistency.
+ * and rely on single, conditional `UPDATE` statements (atomic updates) for both
+ * the book stock (borrow) and the borrowing row (return). If two requests race
+ * for the same resource, only one `UPDATE` succeeds and the other is translated
+ * into a user-friendly error.
  */
 @Injectable()
 export class BorrowingsService {
@@ -29,7 +36,7 @@ export class BorrowingsService {
       // Ensure user exists
       const user = await manager.findOne(User, { where: { id: userId } });
       if (!user) throw new NotFoundException('User not found');
-  
+
       // Atomically decrement stock
       const updateResult = await manager
         .createQueryBuilder()
@@ -41,9 +48,11 @@ export class BorrowingsService {
         .andWhere('"availableQuantity" > 0')
         .returning('*')
         .execute();
-  
-      const updatedBook = updateResult.raw[0];
-  
+
+      // TypeORM's `raw` result is `any`; narrow it to `Book`.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const updatedBook = updateResult.raw[0] as unknown as Book;
+
       if (!updatedBook) {
         // Determine proper error
         const existing = await manager.findOne(Book, {
@@ -52,18 +61,18 @@ export class BorrowingsService {
         if (!existing) throw new NotFoundException('Book not found');
         throw new BadRequestException('No copies available');
       }
-  
+
       // Create borrowing record
       const borrowing = manager.create(Borrowing, {
         book: updatedBook,
         user,
         borrowedAt: new Date(),
       });
-  
+
       return manager.save(borrowing);
     });
   }
-  
+
   async return(userId: string, dto: ReturnBookDto) {
     return this.dataSource.transaction(async (manager) => {
       // Atomically mark borrowing as returned
@@ -76,16 +85,16 @@ export class BorrowingsService {
         .andWhere('"userId" = :userId', { userId })
         .returning('*')
         .execute();
-  
-      const updatedBorrowing = updateResult.raw[0];
-  
-      if (!updatedBorrowing) {
-        // Diagnose reason for failure
+
+      const rawRows = updateResult.raw as unknown as UpdatedBorrowingRow[];
+      const updatedBorrowingRow = rawRows[0];
+
+      if (!updatedBorrowingRow) {
         const borrowing = await manager.findOne(Borrowing, {
           where: { id: dto.borrowingId },
           relations: ['user'],
         });
-  
+
         if (!borrowing) {
           throw new NotFoundException('Borrowing not found');
         }
@@ -97,10 +106,10 @@ export class BorrowingsService {
             "Cannot return someone else's borrowing",
           );
         }
-  
+
         throw new BadRequestException('Unable to return borrowing');
       }
-  
+
       // Atomically increment availability (never exceed totalQuantity)
       await manager
         .createQueryBuilder()
@@ -109,19 +118,19 @@ export class BorrowingsService {
           availableQuantity: () =>
             'LEAST("totalQuantity", "availableQuantity" + 1)',
         })
-        .where('id = :bookId', { bookId: updatedBorrowing.bookId })
+        .where('id = :bookId', { bookId: updatedBorrowingRow.bookId })
         .execute();
-  
+
       // Return full borrowing entity
       const borrowingWithRelations = await manager.findOne(Borrowing, {
-        where: { id: updatedBorrowing.id },
+        where: { id: updatedBorrowingRow.id },
         relations: ['book', 'user'],
       });
-  
+
       if (!borrowingWithRelations) {
         throw new NotFoundException('Borrowing not found after update');
       }
-  
+
       return borrowingWithRelations;
     });
   }

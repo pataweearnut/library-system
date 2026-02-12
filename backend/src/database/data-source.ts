@@ -15,4 +15,3 @@ export const AppDataSource = new DataSource({
   entities: [User, Book, Borrowing],
   migrations: ['src/database/migrations/*.ts'],
 });
-
