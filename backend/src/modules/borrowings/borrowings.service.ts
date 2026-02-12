@@ -72,7 +72,11 @@ export class BorrowingsService {
       await manager.save(borrowing);
 
       const book = borrowing.book;
-      book.availableQuantity += 1;
+
+      if (book.availableQuantity < book.totalQuantity) {
+        book.availableQuantity += 1;
+      }
+      
       await manager.save(book);
 
       return borrowing;

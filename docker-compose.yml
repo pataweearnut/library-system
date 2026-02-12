@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16
+    container_name: library-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LIBRARY_SERVICE_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${LIBRARY_SERVICE_DB_PASS:-postgres}
+      POSTGRES_DB: ${LIBRARY_SERVICE_DB_NAME:-library_db}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    container_name: library-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override host so backend connects to the db service
+      LIBRARY_SERVICE_DB_HOST: db
+    depends_on:
+      - db
+    ports:
+      - '3000:3000'
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: library-frontend
+    restart: unless-stopped
+    environment:
+      # Point the SPA at the backend service inside the Docker network
+      VITE_API_BASE_URL: http://library-backend:3000/api
+    depends_on:
+      - backend
+    ports:
+      - '5173:80'
+
+volumes:
+  pgdata:
+
