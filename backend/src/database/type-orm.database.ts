@@ -12,6 +12,8 @@ export const TypeOrmDatabaseModule = TypeOrmModule.forRootAsync({
     password: process.env.LIBRARY_SERVICE_DB_PASS || 'postgres',
     database: process.env.LIBRARY_SERVICE_DB_NAME || 'library_db',
     entities: [User, Book, Borrowing],
-    synchronize: true,
+    synchronize: false,
+    migrations: ['dist/database/migrations/*.js'],
+    migrationsRun: true,
   }),
 });

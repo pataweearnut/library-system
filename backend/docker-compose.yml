@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    container_name: library-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LIBRARY_SERVICE_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${LIBRARY_SERVICE_DB_PASS:-postgres}
+      POSTGRES_DB: ${LIBRARY_SERVICE_DB_NAME:-library}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: library-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      LIBRARY_SERVICE_DB_HOST: db
+    depends_on:
+      - db
+    ports:
+      - '3000:3000'
+
+volumes:
+  pgdata:
+

@@ -5,10 +5,10 @@ import { Role } from '../../common/enums/role.enum';
 @Entity()
 @Index(['createdAt']) // for findAll() order: { createdAt: 'DESC' }
 export class User extends BaseEntity {
-  @Column({ unique: true }) // unique constraint creates an index on email (login, findByEmail)
+  @Column({ unique: true, length: 255 }) // unique constraint creates an index on email (login, findByEmail)
   email: string;
 
-  @Column()
+  @Column({ length: 255 }) // bcrypt hashes are 60; 255 allows other algorithms
   passwordHash: string;
 
   @Column({ type: 'enum', enum: Role, default: Role.MEMBER })

@@ -1,6 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 function toNumber(value: unknown): number {
   // Handle arrays from multipart/form-data (e.g. ['2024'])
@@ -14,39 +22,52 @@ function toNumber(value: unknown): number {
   return NaN;
 }
 
+const TITLE_MAX = 500;
+const AUTHOR_MAX = 300;
+const ISBN_MAX = 20;
+const PUBLICATION_YEAR_MAX = 2500;
+const QUANTITY_MAX = 10_000;
+
 export class CreateBookDto {
-  @ApiProperty()
+  @ApiProperty({ maxLength: TITLE_MAX })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(TITLE_MAX)
   title: string;
 
-  @ApiProperty()
+  @ApiProperty({ maxLength: AUTHOR_MAX })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(AUTHOR_MAX)
   author: string;
 
-  @ApiProperty()
+  @ApiProperty({ maxLength: ISBN_MAX })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(ISBN_MAX)
   isbn: string;
 
-  @ApiProperty()
+  @ApiProperty({ minimum: 1, maximum: PUBLICATION_YEAR_MAX })
   @Transform(({ value }: { value: unknown }) => toNumber(value))
   @IsInt()
+  @Min(1)
+  @Max(PUBLICATION_YEAR_MAX)
   publicationYear: number;
 
-  @ApiProperty()
+  @ApiProperty({ minimum: 0, maximum: QUANTITY_MAX })
   @Transform(({ value }: { value: unknown }) => toNumber(value))
   @IsInt()
   @Min(0)
+  @Max(QUANTITY_MAX)
   totalQuantity: number;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, minimum: 0, maximum: QUANTITY_MAX })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
     value === undefined || value === '' ? undefined : toNumber(value),
   )
   @IsInt()
   @Min(0)
+  @Max(QUANTITY_MAX)
   availableQuantity?: number;
 }
