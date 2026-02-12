@@ -26,60 +26,103 @@ export class BorrowingsService {
 
   async borrow(userId: string, dto: BorrowBookDto) {
     return this.dataSource.transaction(async (manager) => {
-      const book = await manager.findOne(Book, {
-        where: { id: dto.bookId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!book) throw new NotFoundException('Book not found');
-      if (book.availableQuantity <= 0) {
-        throw new BadRequestException('No copies available');
-      }
-
+      // Ensure user exists
       const user = await manager.findOne(User, { where: { id: userId } });
       if (!user) throw new NotFoundException('User not found');
-
-      book.availableQuantity -= 1;
-      await manager.save(book);
-
+  
+      // Atomically decrement stock
+      const updateResult = await manager
+        .createQueryBuilder()
+        .update(Book)
+        .set({
+          availableQuantity: () => '"availableQuantity" - 1',
+        })
+        .where('id = :bookId', { bookId: dto.bookId })
+        .andWhere('"availableQuantity" > 0')
+        .returning('*')
+        .execute();
+  
+      const updatedBook = updateResult.raw[0];
+  
+      if (!updatedBook) {
+        // Determine proper error
+        const existing = await manager.findOne(Book, {
+          where: { id: dto.bookId },
+        });
+        if (!existing) throw new NotFoundException('Book not found');
+        throw new BadRequestException('No copies available');
+      }
+  
+      // Create borrowing record
       const borrowing = manager.create(Borrowing, {
-        book,
+        book: updatedBook,
         user,
         borrowedAt: new Date(),
       });
+  
       return manager.save(borrowing);
     });
   }
-
+  
   async return(userId: string, dto: ReturnBookDto) {
     return this.dataSource.transaction(async (manager) => {
-      const borrowing = await manager
-        .createQueryBuilder(Borrowing, 'borrowing')
-        .innerJoinAndSelect('borrowing.book', 'book')
-        .innerJoinAndSelect('borrowing.user', 'user')
-        .where('borrowing.id = :id', { id: dto.borrowingId })
-        .setLock('pessimistic_write')
-        .getOne();
-
-      if (!borrowing) throw new NotFoundException('Borrowing not found');
-      if (borrowing.returnedAt) {
-        throw new BadRequestException('Already returned');
+      // Atomically mark borrowing as returned
+      const updateResult = await manager
+        .createQueryBuilder()
+        .update(Borrowing)
+        .set({ returnedAt: () => 'NOW()' })
+        .where('id = :id', { id: dto.borrowingId })
+        .andWhere('"returnedAt" IS NULL')
+        .andWhere('"userId" = :userId', { userId })
+        .returning('*')
+        .execute();
+  
+      const updatedBorrowing = updateResult.raw[0];
+  
+      if (!updatedBorrowing) {
+        // Diagnose reason for failure
+        const borrowing = await manager.findOne(Borrowing, {
+          where: { id: dto.borrowingId },
+          relations: ['user'],
+        });
+  
+        if (!borrowing) {
+          throw new NotFoundException('Borrowing not found');
+        }
+        if (borrowing.returnedAt) {
+          throw new BadRequestException('Already returned');
+        }
+        if (borrowing.user.id !== userId) {
+          throw new BadRequestException(
+            "Cannot return someone else's borrowing",
+          );
+        }
+  
+        throw new BadRequestException('Unable to return borrowing');
       }
-      if (borrowing.user.id !== userId) {
-        throw new BadRequestException("Cannot return someone else's borrowing");
+  
+      // Atomically increment availability (never exceed totalQuantity)
+      await manager
+        .createQueryBuilder()
+        .update(Book)
+        .set({
+          availableQuantity: () =>
+            'LEAST("totalQuantity", "availableQuantity" + 1)',
+        })
+        .where('id = :bookId', { bookId: updatedBorrowing.bookId })
+        .execute();
+  
+      // Return full borrowing entity
+      const borrowingWithRelations = await manager.findOne(Borrowing, {
+        where: { id: updatedBorrowing.id },
+        relations: ['book', 'user'],
+      });
+  
+      if (!borrowingWithRelations) {
+        throw new NotFoundException('Borrowing not found after update');
       }
-
-      borrowing.returnedAt = new Date();
-      await manager.save(borrowing);
-
-      const book = borrowing.book;
-
-      if (book.availableQuantity < book.totalQuantity) {
-        book.availableQuantity += 1;
-      }
-      
-      await manager.save(book);
-
-      return borrowing;
+  
+      return borrowingWithRelations;
     });
   }
 
